@@ -250,10 +250,11 @@ function updateTrackSettings() {
   el.settingsContent.hidden = !hasTrack;
   if (!hasTrack) return;
   el.selectedTrackName.textContent = state.selectedTrack.name;
-  const soundSummary = [];
-  if (state.selectedTrack.once.length) soundSummary.push(`처음 한 번: ${state.selectedTrack.once.join(" · ")}`);
-  if (state.selectedTrack.repeat.length) soundSummary.push(`반복: ${state.selectedTrack.repeat.join(" · ")}`);
-  el.trackSounds.textContent = soundSummary.join(" / ");
+  const onceLine = document.createElement("span");
+  onceLine.textContent = `한번만: ${state.selectedTrack.once.length ? state.selectedTrack.once.join(" · ") : "없음"}`;
+  const repeatLine = document.createElement("span");
+  repeatLine.textContent = `반복: ${state.selectedTrack.repeat.length ? state.selectedTrack.repeat.join(" · ") : "없음"}`;
+  el.trackSounds.replaceChildren(onceLine, repeatLine);
   const random = state.mode === "random";
   el.modeToggle.setAttribute("aria-checked", String(random));
   el.modeToggle.querySelector("span").textContent = random ? "랜덤" : "고정";

@@ -36,6 +36,8 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.04em; }
 .mode-toggle[aria-checked="false"]::before { background: #fff; transform: translateX(32px); }
 .mode-toggle[aria-checked="false"] span { padding: 0 25px 0 0; }
 .track-sounds { margin: 16px 0 0; color: #555; font-size: 11px; }
+.track-sounds span { display: block; }
+.track-sounds span + span { margin-top: 5px; }
 
 .track-panel { position: relative; display: flex; flex-direction: column; background: var(--panel); }
 .track-panel header { margin-bottom: 25px; }
