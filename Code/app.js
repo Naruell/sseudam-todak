@@ -3,6 +3,7 @@
 const DATA_ROOT = "../Data";
 const SOUND_ROOT = "../Sound";
 const STORAGE_KEY = "sseudam-todak-settings-v1";
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 const state = {
   config: { minIntervalMultiply: 1, maxIntervalMultiply: 2, durations: [30] },
@@ -54,6 +55,7 @@ async function init() {
     applyData(configRows, soundRows, trackRows, fileRows);
     restoreSettings();
     render();
+    window.setInterval(renderTracks, 10000);
   } catch (error) {
     console.error(error);
     showToast("데이터를 불러오지 못했습니다. 웹 서버 주소로 열어주세요.", 5000);
@@ -83,7 +85,11 @@ function bindEvents() {
   el.fixedFileSettings.addEventListener("click", handlePreviewClick);
   el.volumeSlider.addEventListener("input", applyVolume);
   el.settingsDialog.addEventListener("close", () => stopPreview(true));
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && state.playing) tick(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    renderTracks();
+    if (state.playing) tick();
+  });
 }
 
 async function loadCsv(url) {
@@ -124,10 +130,18 @@ function applyData(configRows, soundRows, trackRows, fileRows) {
     folder,
     names: files.split(",").map((file) => file.trim()).filter(Boolean),
   }]));
-  state.tracks = trackRows.filter((row) => row.length >= 4 && row[1] && (row[2] || row[3])).map(([id, name, onceSounds, repeatSounds]) => {
+  state.tracks = trackRows.filter((row) => row.length >= 4 && row[1] && (row[2] || row[3])).map(([id, name, onceSounds, repeatSounds, startsAt = "", endsAt = ""]) => {
     const once = onceSounds.split(",").map((sound) => sound.trim()).filter(Boolean);
     const repeat = repeatSounds.split(",").map((sound) => sound.trim()).filter(Boolean);
-    return { id, name, once, repeat, sounds: [...new Set([...once, ...repeat])] };
+    return {
+      id,
+      name,
+      once,
+      repeat,
+      sounds: [...new Set([...once, ...repeat])],
+      visibleFrom: parseKstDateTime(startsAt, false),
+      visibleUntil: parseKstDateTime(endsAt, true),
+    };
   });
 }
 
@@ -166,7 +180,7 @@ function render() {
 }
 
 function renderTracks() {
-  el.trackList.replaceChildren(...state.tracks.map((track) => {
+  el.trackList.replaceChildren(...state.tracks.filter(isTrackVisible).map((track) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "track-button";
@@ -612,6 +626,40 @@ function updateProgress(value) {
 
 function totalSeconds() { return state.durationMinutes * 60; }
 function soundInterval(soundId) { return state.sounds.get(soundId)?.interval || 5; }
+function isTrackVisible(track) {
+  const now = Date.now();
+  return (track.visibleFrom === null || now >= track.visibleFrom) && (track.visibleUntil === null || now <= track.visibleUntil);
+}
+
+function parseKstDateTime(value, inclusiveEnd) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const match = /^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/.exec(text);
+  if (!match) {
+    console.warn(`잘못된 KST 날짜 형식: ${text}`);
+    return null;
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = inclusiveEnd ? 59 : 0;
+  const millisecond = inclusiveEnd ? 999 : 0;
+  const epoch = Date.UTC(year, month - 1, day, hour, minute, second, millisecond) - KST_OFFSET_MS;
+  const kstCheck = new Date(epoch + KST_OFFSET_MS);
+  const valid = kstCheck.getUTCFullYear() === year
+    && kstCheck.getUTCMonth() === month - 1
+    && kstCheck.getUTCDate() === day
+    && kstCheck.getUTCHours() === hour
+    && kstCheck.getUTCMinutes() === minute;
+  if (!valid) {
+    console.warn(`유효하지 않은 KST 날짜: ${text}`);
+    return null;
+  }
+  return epoch;
+}
 function numberOr(value, fallback) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
 function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 function formatTime(seconds) { const whole = Math.max(0, Math.floor(seconds)); const hours = Math.floor(whole / 3600); const minutes = Math.floor((whole % 3600) / 60); const secs = whole % 60; return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` : `${minutes}:${String(secs).padStart(2, "0")}`; }
