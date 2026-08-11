@@ -46,9 +46,11 @@
         </div>
         <div class="player-controls">
           <button class="play-button" id="playButton" type="button" aria-label="재생" disabled><span class="play-icon"></span></button>
-          <div class="time-display"><strong id="elapsedTime">0:00</strong><span>/</span><span id="totalTime">30:00</span></div>
+          <div class="playback-meta">
+            <div class="time-display"><strong id="elapsedTime">0:00</strong><span>/</span><span id="totalTime">30:00</span></div>
+            <div class="inline-volume"><input id="volumeSlider" type="range" min="0" max="2" value="1" step="0.01" aria-label="전체 음량" /></div>
+          </div>
           <div class="control-spacer"></div>
-          <div class="inline-volume"><input id="volumeSlider" type="range" min="0" max="2" value="1" step="0.01" aria-label="전체 음량" /></div>
           <button class="inline-choice speed-select" id="speedControl" type="button">x1.0</button>
           <button class="inline-choice duration-select" id="durationControl" type="button">30 min</button>
         </div>

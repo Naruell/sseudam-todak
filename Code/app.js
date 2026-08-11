@@ -153,6 +153,7 @@ function render() {
   renderDurationOptions();
   renderFixedFileSettings();
   el.volumeSlider.value = state.volume;
+  updateVolumeTrack();
   updateTrackSettings();
   updatePlayer();
 }
@@ -489,6 +490,11 @@ function applyVolume() {
     state.masterGain.gain.setTargetAtTime(state.volume, state.audioContext.currentTime, 0.015);
   }
   saveSettings();
+  updateVolumeTrack();
+}
+
+function updateVolumeTrack() {
+  el.volumeSlider.style.setProperty("--volume-progress", `${(state.volume / 2) * 100}%`);
 }
 
 async function handlePreviewClick(event) {
