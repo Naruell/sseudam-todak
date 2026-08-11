@@ -116,12 +116,19 @@ function applyData(configRows, soundRows, trackRows, fileRows) {
   state.config.minIntervalMultiply = numberOr(config.MinIntervalMultiply, 1);
   state.config.maxIntervalMultiply = numberOr(config.MaxIntervalMultiply, 2);
   state.config.durations = String(config.TimeRserveMinutes || "30").split(",").map(Number).filter((n) => n > 0);
-  state.sounds = new Map(soundRows.filter((row) => row.length >= 2).map(([id, seconds]) => [id, numberOr(seconds, 5)]));
+  state.sounds = new Map(soundRows.filter((row) => row.length >= 2).map(([id, seconds, hideFixed]) => [id, {
+    interval: numberOr(seconds, 5),
+    hideFixed: String(hideFixed || "").trim().toLowerCase() === "true",
+  }]));
   state.files = new Map(fileRows.filter((row) => row.length >= 3).map(([id, folder, files]) => [id, {
     folder,
     names: files.split(",").map((file) => file.trim()).filter(Boolean),
   }]));
-  state.tracks = trackRows.filter((row) => row.length >= 3 && row[1] && row[2]).map(([id, name, sounds]) => ({ id, name, sounds: sounds.split(",").map((sound) => sound.trim()).filter(Boolean) }));
+  state.tracks = trackRows.filter((row) => row.length >= 4 && row[1] && (row[2] || row[3])).map(([id, name, onceSounds, repeatSounds]) => {
+    const once = onceSounds.split(",").map((sound) => sound.trim()).filter(Boolean);
+    const repeat = repeatSounds.split(",").map((sound) => sound.trim()).filter(Boolean);
+    return { id, name, once, repeat, sounds: [...new Set([...once, ...repeat])] };
+  });
 }
 
 function restoreSettings() {
@@ -184,7 +191,8 @@ function renderDurationOptions() {
 }
 
 function renderFixedFileSettings() {
-  el.fixedFileSettings.replaceChildren(...Array.from(state.files, ([soundId, entry]) => {
+  const visibleFiles = Array.from(state.files).filter(([soundId]) => !state.sounds.get(soundId)?.hideFixed);
+  el.fixedFileSettings.replaceChildren(...visibleFiles.map(([soundId, entry]) => {
     const row = document.createElement("div");
     row.className = "fixed-row";
     const label = document.createElement("label");
@@ -228,7 +236,10 @@ function updateTrackSettings() {
   el.settingsContent.hidden = !hasTrack;
   if (!hasTrack) return;
   el.selectedTrackName.textContent = state.selectedTrack.name;
-  el.trackSounds.textContent = state.selectedTrack.sounds.join(" · ");
+  const soundSummary = [];
+  if (state.selectedTrack.once.length) soundSummary.push(`처음 한 번: ${state.selectedTrack.once.join(" · ")}`);
+  if (state.selectedTrack.repeat.length) soundSummary.push(`반복: ${state.selectedTrack.repeat.join(" · ")}`);
+  el.trackSounds.textContent = soundSummary.join(" / ");
   const random = state.mode === "random";
   el.modeToggle.setAttribute("aria-checked", String(random));
   el.modeToggle.querySelector("span").textContent = random ? "랜덤" : "고정";
@@ -350,15 +361,21 @@ function ensureTimeline() {
   if (state.timeline.length && state.sessionKey === key) return;
   state.timeline = [];
   state.sessionKey = key;
-  let cursor = 0, soundIndex = 0;
-  while (cursor < totalSeconds()) {
-    const soundId = state.selectedTrack.sounds[soundIndex % state.selectedTrack.sounds.length];
+  let cursor = 0;
+  const appendEvent = (soundId) => {
     const files = state.files.get(soundId)?.names || [];
-    if (!files.length) { soundIndex += 1; if (soundIndex > state.selectedTrack.sounds.length * 2) break; continue; }
+    if (!files.length || cursor >= totalSeconds()) return;
     const file = state.mode === "random" ? files[Math.floor(Math.random() * files.length)] : (state.fixedFiles[soundId] || files[0]);
     state.timeline.push({ start: cursor, soundId, file, key: `${soundId}/${file}` });
-    cursor += (state.sounds.get(soundId) || 5) * state.intervalMultiply;
-    soundIndex += 1;
+    cursor += soundInterval(soundId) * state.intervalMultiply;
+  };
+
+  state.selectedTrack.once.forEach(appendEvent);
+  const playableRepeatSounds = state.selectedTrack.repeat.filter((soundId) => (state.files.get(soundId)?.names || []).length);
+  let repeatIndex = 0;
+  while (cursor < totalSeconds() && playableRepeatSounds.length) {
+    appendEvent(playableRepeatSounds[repeatIndex % playableRepeatSounds.length]);
+    repeatIndex += 1;
   }
 }
 
@@ -594,6 +611,7 @@ function updateProgress(value) {
 }
 
 function totalSeconds() { return state.durationMinutes * 60; }
+function soundInterval(soundId) { return state.sounds.get(soundId)?.interval || 5; }
 function numberOr(value, fallback) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
 function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 function formatTime(seconds) { const whole = Math.max(0, Math.floor(seconds)); const hours = Math.floor(whole / 3600); const minutes = Math.floor((whole % 3600) / 60); const secs = whole % 60; return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` : `${minutes}:${String(secs).padStart(2, "0")}`; }
